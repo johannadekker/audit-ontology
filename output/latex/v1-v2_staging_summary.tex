@@ -1,0 +1,66 @@
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+
+\begin{longtable}{
+    P{0.20\textwidth}
+    P{0.37\textwidth}
+    P{0.34\textwidth}
+}
+
+\caption{Summary of issues identified in V1 and corresponding changes implemented in V2.}
+\label{tab:v1-v2-summary} \\
+
+\toprule
+\textbf{V1 issue} &
+\textbf{Form of the issue} &
+\textbf{V2 response} \\
+\midrule
+\endfirsthead
+
+\multicolumn{3}{l}{\small\itshape Table~\thetable\ continued} \\
+\toprule
+\textbf{V1 issue} &
+\textbf{Form of the issue} &
+\textbf{V2 response} \\
+\midrule
+\endhead
+
+\midrule
+\multicolumn{3}{r}{\small\itshape Continued on next page} \\
+\endfoot
+
+\bottomrule
+\endlastfoot
+
+Source scope &
+\texttt{index.md} was parsed as a requirement, creating one non-requirement record and index-specific fields. &
+Exclude \texttt{index.md} before requirement parsing. \\
+
+Identity/provenance redundancy &
+The fields \texttt{filename}, \texttt{slug}, \texttt{title}, and \texttt{id} all contain the same identifying information, while none contains only the requirement ID. &
+Extract the tagged requirement ID into a single identity field and retain one separate field for provenance from the Algoritmekader. \\
+
+Website metadata &
+\texttt{hide}, \texttt{allow\_excel\_export}, and \texttt{summary} represented website configuration or presentation rather than requirement content. &
+Remove these fields from the cleaned requirement dataset. \\
+
+Over-parsed Markdown headings &
+The \texttt{\#\#} headings in \texttt{aia-38} and \texttt{avg-10} were incorrectly converted into separate one-off fields, although they belonged to the explanatory text. &
+Merge the affected subsections into \texttt{section\_toelichting}. \\
+
+Serialized multi-valued fields &
+\texttt{levenscyclus}, \texttt{onderwerp}, \texttt{soort-toepassing}, \texttt{risicogroep}, \texttt{rol-ai-act}, \texttt{transparantieverplichting}, \texttt{systeemrisico}, and \texttt{rollen} were analysed as serialized list combinations rather than individual values. List order also created artificial distinctions. &
+Preserve lists during parsing and expand them into individual requirement--field--value assignments before analysis. \\
+
+Rudimentary semantic classification &
+Cardinality-based rules misclassified fields, e.g.\ \texttt{levenscyclus} as free text and \texttt{uitzondering} as Boolean metadata. &
+Replace heuristic classification with explicit semantic field types based on source inspection. \\
+
+Generated relationship placeholders &
+\texttt{section\_maatregelen} and \texttt{section\_hulpmiddelen} contained generation directives rather than substantive prose. &
+Treat these as references to separate entities and import the corresponding source files in later iterations. \\
+
+\end{longtable}
+\endgroup

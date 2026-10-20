@@ -1,0 +1,71 @@
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.12}
+
+\begin{longtable}{
+    P{0.14\textwidth}
+    P{0.22\textwidth}
+    P{0.36\textwidth}
+    P{0.20\textwidth}
+}
+
+\caption{Staged transformation of the raw Algoritmekader source into the ontology specification.}
+\label{tab:algoritmekader-staging} \\
+
+\toprule
+\textbf{Stage} &
+\textbf{Purpose} &
+\textbf{Processing and decisions} &
+\textbf{Result carried forward} \\
+\midrule
+\endfirsthead
+
+\multicolumn{4}{l}{\footnotesize\itshape Table~\thetable\ continued} \\
+\toprule
+\textbf{Stage} &
+\textbf{Purpose} &
+\textbf{Processing and decisions} &
+\textbf{Result carried forward} \\
+\midrule
+\endhead
+
+\midrule
+\multicolumn{4}{r}{\footnotesize\itshape Continued on next page} \\
+\endfoot
+
+\bottomrule
+\endlastfoot
+
+Raw Algoritmekader &
+Establish the complete source material before imposing an ontology structure. &
+The source consists of Markdown requirement files with YAML front matter, Markdown sections, website-generation directives, controlled values, free text, and links. The website presents requirements individually and does not provide a global schema for the collection. &
+Authoritative source material for exploratory extraction. \\
+
+V1: exploratory extraction &
+Determine what information is present and how consistently the source is structured. &
+All 63 Markdown files were parsed without filtering. YAML keys became columns, every \texttt{\#\#} heading became a section field, links were extracted, and nested YAML values were serialized for CSV/Excel inspection. Column profiles, low-cardinality values, metadata/section inventories, and a preliminary cardinality-based field classification were generated. &
+A complete but deliberately unrefined tabular representation exposing source structure, inconsistencies, and extraction artefacts. \\
+
+V2: structural normalization &
+Correct extraction artefacts while preserving the meaning and provenance of the 62 actual requirements. &
+\texttt{index.md} is excluded; identity is normalized to \texttt{requirement\_id}, \texttt{title}, and \texttt{source\_file}; website-only metadata is removed; explanatory one-off headings are merged into \texttt{section\_toelichting}; list-valued metadata is preserved and exploded into individual assignments; and field types are classified explicitly from source inspection. \texttt{section\_maatregelen}, \texttt{section\_hulpmiddelen}, \texttt{uitzondering}, and \texttt{status\_vereiste} are retained for later semantic treatment. &
+A source-faithful, structurally normalized requirement dataset and explicit vocabulary assignments suitable for semantic analysis. \\
+
+V3: semantic normalization and source expansion \textit{(planned)} &
+Resolve structures that V2 showed cannot be represented adequately as ordinary requirement attributes. &
+Import the separate maatregelen and hulpmiddelen collections and resolve their generated references; import the canonical \texttt{begrippenlijst.md}; distinguish substantive applicability text from generation directives in \texttt{section\_van toepassing op}; inspect sparse status metadata; and formalize compound applicability and exception expressions as conditions rather than categorical properties. &
+Normalized entities, terminology, relations, and applicability structures from the Algoritmekader source family. \\
+
+Ontology modelling and alignment \textit{(planned)} &
+Translate the stabilized source model into explicit ontology constructs and determine what can be reused from existing vocabularies. &
+Define candidate classes, properties, controlled concepts, provenance relations, and applicability structures from the normalized data. Compare these concepts with relevant external vocabularies, including the DPV EU AI Act vocabulary, and reuse or specialize existing terms where their semantics match the required concepts. &
+A candidate ontology model with documented reuse, extensions, mappings, and unresolved modelling decisions. \\
+
+Final ontology specification \textit{(planned)} &
+Produce the formal specification against which the ontology implementation can be evaluated. &
+Consolidate the validated conceptual model into explicit definitions of classes, properties, relations, vocabularies, applicability rules, provenance, identifiers, and external mappings. Document modelling decisions and constraints required for consistent implementation and extension. &
+The final ontology specification forming the basis for implementation, validation, and later audit-support applications. \\
+
+\end{longtable}
+\endgroup

@@ -300,9 +300,8 @@ def strip_html_comments(text):
     """
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
-
+ """Normalise an H2 Markdown heading for use as a dataframe field name."""
 def normalise_heading(heading):
-    """Normalise an H2 Markdown heading for use as a dataframe field name."""
     # Remove MkDocs attributes such as: { data-search-exclude }
     heading = re.sub(r"\s*\{.*?\}\s*$", "", heading).strip()
 

@@ -38,9 +38,11 @@ PROVENANCE_COLUMNS = {
 # Heading-parsing artefacts that are not meaningful as separate columns 
 # but should be merged into the explanatory text.
 # !! Note that "begrippen" contains a list of terms !!
+# !! aia-38 contains applicability conditions
 MERGE_INTO_TOELICHTING = {
     #aia-38
     "testen van ai-systemen met een hoog risico onder reële omstandigheden buiten ai-testomgevingen",
+    #aia-06
     "voorbeeld",
     #avg-10
     "algemene eisen aan geautomatiseerde besluitvorming door overheden",
@@ -70,8 +72,8 @@ def extract_requirement_id(raw_id: str, source_file: Path) -> str:
         )
 
     return raw_id.removeprefix(ID_PREFIX)
-# These fields are useful for rendering the Algoritmekader website, but are
-# not part of the requirement data we want to model.
+
+# These fields are website metadata and are not relevant to the requirement table.
 DROP_FIELDS = {
     "hide",
     "open-source",
@@ -152,7 +154,9 @@ def split_frontmatter(text):
     return metadata, body.strip()
 
 
-    #Normalise an H2 Markdown heading for use as a dataframe field name
+    # Normalise an H2 Markdown heading for use as a dataframe field name
+    # Consistent naming allows avoids duplicates and allows for application of 
+    # complex parsing logic
 def normalise_heading(heading):
 
     # Remove MkDocs attributes such as: { data-search-exclude }
@@ -160,7 +164,7 @@ def normalise_heading(heading):
 
     # Collapse repeated whitespace/newlines and use lowercase consistently.
     heading = re.sub(r"\s+", " ", heading)
-
+    # Lowercase for consistent column names
     return heading.lower()
 
 
@@ -365,6 +369,8 @@ df["extraction_run_at"] = datetime.now().astimezone().isoformat(timespec="second
 # EXPLODE CONTROLLED VOCABULARIES
 # ---------------------------------------------------------
 
+# Detailed relational data for each individual vocabulary value
+
 vocabulary_assignments = []
 
 for _, row in df.iterrows():
@@ -394,7 +400,8 @@ else:
         .groupby(["field", "value"], as_index=False)
         .agg(count=("requirement_id", "nunique"))
     )
-
+    # Creates a descriptive overview summary
+    
     vocabulary_counts_df["coverage_pct"] = (
         vocabulary_counts_df["count"] / len(df) * 100
     ).round(2)

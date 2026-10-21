@@ -1,3 +1,6 @@
 .DS_Store
 data/Algoritmekader/
 data/DPV/
+__pycache__/
+~$*
+*.bak

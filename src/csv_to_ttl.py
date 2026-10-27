@@ -1,104 +1,119 @@
 import csv
 import re
+from pathlib import Path
 from rdflib import Graph, Literal, Namespace
 from rdflib import RDF, RDFS, URIRef
 from rdflib.namespace import OWL
 
+# Define the path to the ontology directory
+ONTOLOGY_DIR = Path("/Users/johannadekker/thesis-ontology")
+ONTOLOGY_IRI = "http://www.semanticweb.org/johannadekker/ontologies/2026/9/NL-AI-Governance"
+NL = Namespace(ONTOLOGY_IRI + "/")
+INSTANCES_IRI = URIRef(ONTOLOGY_IRI + "-instances")
+
 file_names = ["vereisten", "maatregelen", "hulpmiddelen"]
 id_columns = ["requirement_id", "maatregel_id", "hulpmiddel_id"]
-prefixes   = ["requirement", "measure", "tools"]
-class_names = ["Requirement", "Measure", "Tools"]
+prefixes   = ["requirement", "measure", "tool"]
+class_names = ["Requirement", "Measure", "Tool"]
 
-#open the CSV file and read its contents into a list of dictionaries
-def open_file(filename):
-    with open("output/" + filename + ".csv", encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f))
-    return rows
+# Mapping of CSV fields to ontology classes and predicates
+# Edit this to expand automatic population of the ontology with more fields from the CSV files
+fields = {
+    "categorie": (NL.Tool, RDF.type),
+    "levenscyclus": (NL.LifecycleStage, NL.appliesToStage),
+    "rollen": (NL.AlgoritmekaderRole, NL.relevantForRole),
+    "rol-ai-act": (NL.AIActRole, NL.appliesToRole),
+}
 
-NL = Namespace("http://www.semanticweb.org/johannadekker/ontologies/2026/9/NL-AI-Governance/")
-g = Graph()
-g.bind("", NL)
 
-# create instances of the classes and add them to the graph
-def get_instance(class_name, id_column, prefix, rows):
-    for row in rows:
-        node = NL[prefix + "-" + row[id_column]]
-        g.add((node, RDF.type, NL[class_name]))
-        g.add((node, RDFS.label, Literal(row["title"], lang="nl")))
-    return rows
-
-# loop through the file names and create instances of the classes
-for i in range(len(file_names)):
-    rows = open_file(file_names[i])
-    get_instance(class_names[i], id_columns[i], prefixes[i], rows)
-
+# make the text in the ontology and csvs easy to match by normalising it
+# removes IRI namespaces, lowercases, removes "stage-" and "role-" prefixes, and removes hyphens, underscores, and whitespace
 def normalise(text):
-    """'Impact-assessment' -> 'impactassessment'"""
-    return re.sub(r"[-_\s]", "", str(text).lower())
+    text = str(text).removeprefix(str(NL)).lower().removeprefix("stage-").removeprefix("role-")
+    return re.sub(r"[-_\s]", "", text)
 
 
-def build_lookup(base, parent, mode):
-    """Map normalised names to the classes (or individuals) under `parent`."""
-    if mode == "subclass":
-        candidates = set(base.transitive_subjects(RDFS.subClassOf, parent)) - {parent}
-    elif mode == "instance":
-        candidates = set(base.subjects(RDF.type, parent))
-    else:
-        raise ValueError(f"mode must be 'subclass' or 'instance', got {mode!r}")
+# Create an instance of the class for every row of the csv, with its Dutch title as label
+def add_instances(g, filename, class_name, id_column, prefix):
+    with open(f"output/{filename}.csv", encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            node = NL[f"{prefix}-{row[id_column]}"]
+            g.add((node, RDF.type, NL[class_name]))
+            g.add((node, RDFS.label, Literal(row["title"], lang="nl")))
 
+
+# Build a lookup table for the subclasses or instances directly under a given parent class in the ontology,
+# mapping normalised names and labels to their corresponding URIs.
+def build_lookup(base, parent):
+    children = set(base.subjects(RDFS.subClassOf, parent)) | set(base.subjects(RDF.type, parent))
     lookup = {}
-    for item in candidates:
-        names = {normalise(str(item).removeprefix(str(NL)))}
-        names |= {normalise(label) for label in base.objects(item, RDFS.label)}
-        for name in names:
-            if name in lookup and lookup[name] != item:
-                raise SystemExit(f"Ambiguous match for '{name}': {lookup[name]} and {item}")
-            lookup[name] = item
+    for child in children:
+        for name in [child, *base.objects(child, RDFS.label)]:
+            key = normalise(name)
+            if lookup.get(key, child) != child:
+                raise SystemExit(f"Ambiguous match for {key}: {lookup[key]} vs {child}")
+            lookup[key] = child
     return lookup
 
 
-def populate(g, lookup, assignments_path, id_column, id_prefix, field, mode,
-             predicate=None, skip_values=()):
-    """Add one triple per row of the assignments table for the given field."""
-    if mode == "instance" and predicate is None:
-        raise ValueError("instance mode needs a predicate")
-    unknown, count = set(), 0
-    with open(assignments_path, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f):
-            if row["field"] != field or row["value"] in skip_values:
-                continue
-            target = lookup.get(normalise(row["value"]))
-            if target is None:
-                unknown.add(row["value"])
-                continue
-            node = NL[f"{id_prefix}-{row[id_column]}"]
-            g.add((node, RDF.type, target) if mode == "subclass"
-                  else (node, predicate, target))
-            count += 1
-    if unknown:
-        raise SystemExit(f"Field '{field}': no match in the ontology for {sorted(unknown)}")
-    print(f"{field}: {count} assignments added")
+# Add one triple per row of the assignments table for the given field.
+def populate(g, lookup, csv_path, id_column, prefix, field, predicate):
+    with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        rows = [row for row in csv.DictReader(f) if row["field"] == field]
 
-base = Graph()
-base.parse("/Users/johannadekker/thesis-ontology/thesis-ontology.ttl", format="turtle")
+    missing = {row["value"] for row in rows if normalise(row["value"]) not in lookup}
+    if missing:
+        raise SystemExit(f"Missing {field} values in ontology: {sorted(missing)}")
 
-populate(g, build_lookup(base, NL.Tools, "subclass"),
-         "output/hulpmiddelen_vocabulary_assignments.csv",
-         "hulpmiddel_id", "tools", "categorie", "subclass")
+    for row in rows:
+        g.add((NL[f"{prefix}-{row[id_column]}"], predicate, lookup[normalise(row["value"])]))
+    print(f"{field}: {len(rows)} assignments added")
 
-## populate(g, build_lookup(base, NL.RiskGroup, "instance"),
-        ##sed "output/vereisten_vocabulary_assignments.csv",
-        ## "requirement_id", "requirement", "risicogroep", "instance",
-        ## predicate=NL.appliesToRiskGroup,
-        ## skip_values=("niet-van-toepassing", "uitzondering-van-toepassing"))
 
-inst = URIRef("http://www.semanticweb.org/johannadekker/ontologies/2026/9/NL-AI-Governance-instances")
-g.add((inst, RDF.type, OWL.Ontology))
-g.add((inst, OWL.imports, URIRef("http://www.semanticweb.org/johannadekker/ontologies/2026/9/NL-AI-Governance")))
+# Create all instances from the csv files
+def add_all_instances(g):
+    for file, id_column, prefix, class_name in zip(file_names, id_columns, prefixes, class_names):
+        add_instances(g, file, class_name, id_column, prefix)
 
-g.serialize("/Users/johannadekker/thesis-ontology/wip-ontology.ttl", format="turtle")
-merged = Graph()
-merged.parse("/Users/johannadekker/thesis-ontology/thesis-ontology.ttl", format="turtle")
-merged.parse("/Users/johannadekker/thesis-ontology/wip-ontology.ttl", format="turtle")
-merged.remove((None, OWL.imports, None))   # the import is no longer needed
-merged.serialize("/Users/johannadekker/thesis-ontology/releases/thesis-ontology-v0.1.ttl", format="turtle")
+
+# Add all field assignments (categories, lifecycle stages, roles) from the csv files
+def add_all_assignments(g, base):
+    for field, (parent, predicate) in fields.items():
+        lookup = build_lookup(base, parent)
+        for file, id_column, prefix in zip(file_names, id_columns, prefixes):
+            populate(g, lookup, f"output/{file}_vocabulary_assignments.csv", id_column, prefix, field, predicate)
+
+
+def add_instances_header(g):
+    """Declare the instances ontology and its import of the main ontology."""
+    g.add((INSTANCES_IRI, RDF.type, OWL.Ontology))
+    g.add((INSTANCES_IRI, OWL.imports, URIRef(ONTOLOGY_IRI)))
+
+
+def merge(base, instances):
+    """Combine ontology and instances into one ontology, without the instances header."""
+    merged = base + instances
+    merged.remove((INSTANCES_IRI, None, None))
+    return merged
+
+
+def save(graph, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    graph.serialize(path, format="turtle")
+
+
+def main():
+    base = Graph().parse(ONTOLOGY_DIR / "thesis-ontology.ttl", format="turtle")
+    g = Graph()
+    g.bind("", NL)
+
+    add_all_instances(g)
+    add_all_assignments(g, base)
+    add_instances_header(g)
+
+    save(g, ONTOLOGY_DIR / "wip-ontology.ttl")
+    save(merge(base, g), ONTOLOGY_DIR / "releases" / "thesis-ontology-v0.1.ttl")
+
+
+if __name__ == "__main__":
+    main()

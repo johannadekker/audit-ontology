@@ -25,6 +25,12 @@ fields = {
     "rol-ai-act": (NL.AIActRole, NL.appliesToRole),
 }
 
+relations = {
+    ("maatregelen", "vereiste"): NL.implements,
+    ("hulpmiddelen", "vereiste"): NL.supportsRequirement,
+    ("hulpmiddelen", "maatregel"): NL.supportsMeasure,
+}
+
 
 # make the text in the ontology and csvs easy to match by normalising it
 # removes IRI namespaces, lowercases, removes "stage-" and "role-" prefixes, and removes hyphens, underscores, and whitespace
@@ -83,7 +89,19 @@ def add_all_assignments(g, base):
         for file, id_column, prefix in zip(file_names, id_columns, prefixes):
             populate(g, lookup, f"output/{file}_vocabulary_assignments.csv", id_column, prefix, field, predicate)
 
-
+# Add the links between items (measure implements requirement, tool supports measure, ...)
+def add_relations(g):
+    prefix_of = dict(zip(file_names, prefixes))
+    added = len(g)
+    with open("output/cross_references.csv", encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            key = (row["source_collection"], row["relation_field"])
+            if key in relations and row["resolved"] == "True":
+                source = NL[f"{prefix_of[row['source_collection']]}-{row['source_id']}"]
+                target = NL[f"{prefix_of[row['target_collection']]}-{row['target_id']}"]
+                g.add((source, relations[key], target))
+    print(f"relations: {len(g) - added} links added")
+    
 def add_instances_header(g):
     """Declare the instances ontology and its import of the main ontology."""
     g.add((INSTANCES_IRI, RDF.type, OWL.Ontology))
@@ -109,6 +127,7 @@ def main():
 
     add_all_instances(g)
     add_all_assignments(g, base)
+    add_relations(g)
     add_instances_header(g)
 
     save(g, ONTOLOGY_DIR / "wip-ontology.ttl")

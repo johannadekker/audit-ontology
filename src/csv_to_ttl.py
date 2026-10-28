@@ -15,6 +15,7 @@ file_names = ["vereisten", "maatregelen", "hulpmiddelen"]
 id_columns = ["requirement_id", "maatregel_id", "hulpmiddel_id"]
 prefixes   = ["requirement", "measure", "tool"]
 class_names = ["Requirement", "Measure", "Tool"]
+
 skip_values = {"niet-van-toepassing"}
 
 # Mapping of CSV fields to ontology classes and predicates
@@ -27,6 +28,7 @@ fields = {
     "risicogroep": (NL.RiskGroup, NL.appliesToRiskGroup),
     "transparantieverplichting": (NL.TransparencyStatus, NL.appliesToTransparencyStatus),
     "uitzondering": (NL.Exception, NL.appliesToException),
+    "soort-toepassing": (NL.AIApplication, NL.appliesToApplication),
 }
 
 relations = {
@@ -56,7 +58,7 @@ def add_instances(g, filename, class_name, id_column, prefix):
 # mapping normalised names and labels to their corresponding URIs.
 # Two ways to match: label or csvValue. Latter is when label deviates from csv value
 def build_lookup(base, parent):
-    children = set(base.subjects(RDFS.subClassOf, parent)) | set(base.subjects(RDF.type, parent))
+    children = (set(base.transitive_subjects(RDFS.subClassOf, parent)) - {parent}) | set(base.subjects(RDF.type, parent))
     lookup = {}
     for child in children:
         for name in [child, *base.objects(child, RDFS.label), *base.objects(child, NL.csvValue)]:
@@ -106,6 +108,17 @@ def add_relations(g):
                 target = NL[f"{prefix_of[row['target_collection']]}-{row['target_id']}"]
                 g.add((source, relations[key], target))
     print(f"relations: {len(g) - added} links added")
+
+def add_sources(g, base):
+    lookup = build_lookup(base, NL.LegalSource)
+    added = len(g)
+    with open("output/vereisten.csv", encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            key = normalise(row["requirement_id"].split("-")[0])
+            if key not in lookup:
+                raise SystemExit(f"No legal source in the ontology for '{key}'")
+            g.add((NL[f"requirement-{row['requirement_id']}"], NL.derivedFrom, lookup[key]))
+    print(f"sources: {len(g) - added} links added")
     
 def add_instances_header(g):
     """Declare the instances ontology and its import of the main ontology."""
@@ -133,6 +146,7 @@ def main():
     add_all_instances(g)
     add_all_assignments(g, base)
     add_relations(g)
+    add_sources(g, base)
     add_instances_header(g)
 
     save(g, ONTOLOGY_DIR / "wip-ontology.ttl")

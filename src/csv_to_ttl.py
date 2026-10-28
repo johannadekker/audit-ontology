@@ -15,6 +15,7 @@ file_names = ["vereisten", "maatregelen", "hulpmiddelen"]
 id_columns = ["requirement_id", "maatregel_id", "hulpmiddel_id"]
 prefixes   = ["requirement", "measure", "tool"]
 class_names = ["Requirement", "Measure", "Tool"]
+skip_values = {"niet-van-toepassing"}
 
 # Mapping of CSV fields to ontology classes and predicates
 # Edit this to expand automatic population of the ontology with more fields from the CSV files
@@ -23,6 +24,9 @@ fields = {
     "levenscyclus": (NL.LifecycleStage, NL.appliesToStage),
     "rollen": (NL.AlgoritmekaderRole, NL.relevantForRole),
     "rol-ai-act": (NL.AIActRole, NL.appliesToRole),
+    "risicogroep": (NL.RiskGroup, NL.appliesToRiskGroup),
+    "transparantieverplichting": (NL.TransparencyStatus, NL.appliesToTransparencyStatus),
+    "uitzondering": (NL.Exception, NL.appliesToException),
 }
 
 relations = {
@@ -50,11 +54,12 @@ def add_instances(g, filename, class_name, id_column, prefix):
 
 # Build a lookup table for the subclasses or instances directly under a given parent class in the ontology,
 # mapping normalised names and labels to their corresponding URIs.
+# Two ways to match: label or csvValue. Latter is when label deviates from csv value
 def build_lookup(base, parent):
     children = set(base.subjects(RDFS.subClassOf, parent)) | set(base.subjects(RDF.type, parent))
     lookup = {}
     for child in children:
-        for name in [child, *base.objects(child, RDFS.label)]:
+        for name in [child, *base.objects(child, RDFS.label), *base.objects(child, NL.csvValue)]:
             key = normalise(name)
             if lookup.get(key, child) != child:
                 raise SystemExit(f"Ambiguous match for {key}: {lookup[key]} vs {child}")
@@ -65,7 +70,7 @@ def build_lookup(base, parent):
 # Add one triple per row of the assignments table for the given field.
 def populate(g, lookup, csv_path, id_column, prefix, field, predicate):
     with open(csv_path, encoding="utf-8-sig", newline="") as f:
-        rows = [row for row in csv.DictReader(f) if row["field"] == field]
+        rows = [row for row in csv.DictReader(f) if row["field"] == field and row["value"] not in skip_values]
 
     missing = {row["value"] for row in rows if normalise(row["value"]) not in lookup}
     if missing:
@@ -131,7 +136,7 @@ def main():
     add_instances_header(g)
 
     save(g, ONTOLOGY_DIR / "wip-ontology.ttl")
-    save(merge(base, g), ONTOLOGY_DIR / "releases" / "thesis-ontology-v0.1.ttl")
+    save(merge(base, g), ONTOLOGY_DIR / "releases" / "thesis-ontology-v0.2.ttl")
 
 
 if __name__ == "__main__":
